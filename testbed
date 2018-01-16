@@ -1,0 +1,43 @@
+#!/bin/bash
+
+declare -A hosts
+
+hosts=( ["hd4"]="root" ["hd14"]="root" ["fiona.fi.muni.cz"]="maara" )
+
+for host in "${!hosts[@]}"; do
+    user="${hosts[$host]}"
+#    echo "Stopping UG at $user"@"$host"
+    ssh "$user"@"$host" "killall uv &> /dev/null"
+done
+
+if [ "$1" == "stop" ]; then
+    return 0;
+fi
+
+send="$1"
+recv="$2"
+
+if ( [ ! "$send" ] || [ -z "${hosts[$send]}" ] ); then
+    send="fiona.fi.muni.cz"
+fi
+
+if ( [ ! "$recv" ] || [ -z "${hosts[$recv]}" ] ); then
+    recv="fiona.fi.muni.cz"
+fi
+
+suser="${hosts[$send]}"
+ruser="${hosts[$recv]}"
+
+#sender parameters; Only capture device, format and compression
+sconf="uv -t testcard:200:200:30:UYVY -c libavcodec"
+rconf="DISPLAY=:0 uv -d gl"
+
+ssh "$suser"@"$send" "$sconf --control-port 12346 --param control-accept-global $recv &> sendlog &"
+ssh "$ruser"@"$recv" "$rconf --control-port 12347 --param control-accept-global &> recvlog &"
+
+sleep 1
+
+echo "stats on" | netcat "$send" 12346
+echo "stats on" | netcat "$recv" 12347
+
+echo "Testbed running: '$send' -> '$recv'"
